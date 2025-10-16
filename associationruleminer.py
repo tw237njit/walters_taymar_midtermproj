@@ -123,29 +123,29 @@ rules_fp = association_rules(frequent_itemsets_fp, metric="confidence", min_thre
 # ==========================================================
 # STEP 7: Display Association Rules (All Algorithms)
 # ==========================================================
-print("\n\n==============================")
+print("\n\n================================================")
 print("🔹 FREQUENT ITEMS FOUND BY BRUTE FORCE:")
-print("==============================")
+print("================================================")
 for items, sup in frequent_itemsets_brute:
-    print(f"{items} | support={sup:.2f}")
-print("\n\n==============================")
+    print(f"{items} | support: {sup:.2f}")
+print("\n\n================================================")
 print("🔸 ASSOCIATION RULES — BRUTE FORCE")
-print("==============================")
+print("================================================")
 for ant, cons, sup, conf in rules_brute:
-    print(f"{ant} → {cons} (support={sup:.2f}, confidence={conf:.2f})")
+    print(f"{ant} → {cons} (support: {sup:.2f}, confidence: {conf:.2f})")
 
-print("\n\n==============================")
+print("\n\n================================================")
 print("🔸 ASSOCIATION RULES — APRIORI")
-print("==============================")
+print("================================================")
 for _, row in rules_ap.iterrows():
     print(f"{tuple(row['antecedents'])} → {tuple(row['consequents'])} "
-          f"(support={row['support']:.2f}, confidence={row['confidence']:.2f})")
+          f"(support: {row['support']:.2f}, confidence: {row['confidence']:.2f})")
 
-print("\n\n==============================")
+print("\n\n================================================")
 print("🔸 ASSOCIATION RULES — FP-GROWTH")
-print("==============================")
+print("================================================")
 for _, row in rules_fp.iterrows():
     print(f"{tuple(row['antecedents'])} → {tuple(row['consequents'])} "
-          f"(support={row['support']:.2f}, confidence={row['confidence']:.2f})")
+          f"(support: {row['support']:.2f}, confidence: {row['confidence']:.2f})")
 
 print("\n✅ All algorithms executed successfully!")
