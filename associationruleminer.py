@@ -27,14 +27,34 @@ for pkg in ["pandas", "mlxtend"]:
 
 import pandas as pd
 from mlxtend.frequent_patterns import apriori, fpgrowth, association_rules
+# ==========================================================
+# STEP 0: Load Dataset (with file path check)
+# ==========================================================
+
+
+
 
 # ==========================================================
 # STEP 1: Load Dataset (with file path check)
 # ==========================================================
-filename = r"C:\SCHOOL PROJECTS\Data Mining\walters_taymar_midtermproj\generic_transactions.csv"
+import os
+import pandas as pd
+print
 
 try:
-    data = pd.read_csv(filename)
+    chosenDatabase = int(input("Enter number to select a database"))
+except ValueError:
+    print("Invalid Input Please try again")
+ 
+# Always load relative to script location
+base_path = os.path.dirname(os.path.abspath(__file__))
+file_path = os.path.join(base_path, "generic_transactions.csv")
+data = pd.read_csv(file_path)
+
+#filename = r"C:\SCHOOL PROJECTS\Data Mining\walters_taymar_midtermproj\generic_transactions.csv"
+
+try:
+    data = pd.read_csv(file_path)
     print("✅ File loaded successfully!\n")
 except FileNotFoundError:
     raise FileNotFoundError("❌ File not found. Please check your file path and try again.")
@@ -44,6 +64,24 @@ except FileNotFoundError:
 # ==========================================================
 transactions = [t.replace(" ", "").split(",") for t in data["Transaction"]]
 all_items = sorted(set(item for sublist in transactions for item in sublist))
+
+# =====================================================
+# USER INPUT SECTION
+# =====================================================
+
+try:
+    min_support = float(input("Enter minimum support (e.g., 0.3 for 30%): "))
+except ValueError:
+    print("Invalid input. Using default min_support = 0.3")
+    min_support = 0.3
+
+try:
+    min_confidence = float(input("Enter minimum confidence (e.g., 0.6 for 60%): "))
+except ValueError:
+    print("Invalid input. Using default min_confidence = 0.6")
+    min_confidence = 0.6
+
+print(f"\nUsing min_support = {min_support} and min_confidence = {min_confidence}\n")
 
 # ==========================================================
 # STEP 3: Brute-force Frequent Itemset Mining
