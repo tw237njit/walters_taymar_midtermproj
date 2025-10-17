@@ -39,16 +39,34 @@ from mlxtend.frequent_patterns import apriori, fpgrowth, association_rules
 # ==========================================================
 import os
 import pandas as pd
-print
+print("Here are the following transactional databases\n 1) Generic\n 2) Nike\n 3) Best Buy\n 4) Coffee Shop\n 5) K-mart\n ")
 
-try:
-    chosenDatabase = int(input("Enter number to select a database"))
-except ValueError:
-    print("Invalid Input Please try again")
+
+    
  
+def selectfile():
+    while True:
+        fileNumber = int(input("Enter number to select a database: \n"))
+    
+        match fileNumber:
+            case 1:
+                return "generic_transactions.csv"
+            case 2:
+                return "nike_product_transactions.csv"
+            case 3:
+                return "bestbuy_transactions.csv"
+            case 4:
+                return "coffee_transactions.csv"
+            case 5:
+                return "k-mart_transactions.cs"
+            case _: 
+                print("Invalid Input Please try again")
+
+
+
 # Always load relative to script location
 base_path = os.path.dirname(os.path.abspath(__file__))
-file_path = os.path.join(base_path, "generic_transactions.csv")
+file_path = os.path.join(base_path, selectfile())
 data = pd.read_csv(file_path)
 
 #filename = r"C:\SCHOOL PROJECTS\Data Mining\walters_taymar_midtermproj\generic_transactions.csv"
