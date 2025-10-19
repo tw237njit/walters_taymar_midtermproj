@@ -3,7 +3,7 @@
 # ----------------------------------------------------------
 # Author: Taymar Walters
 # Description:
-#   1. Load and parse a transactions CSV file.
+#   1. Load and parse a transactions CSV file (robust to header differences).
 #   2. Run a brute-force frequent itemset mining algorithm.
 #   3. Generate association rules from brute-force results.
 #   4. Run Apriori and FP-Growth using mlxtend for comparison.
@@ -12,6 +12,8 @@
 import itertools
 import subprocess
 import sys
+import os
+import pandas as pd
 
 # ==========================================================
 # STEP 0: Auto-install required packages (if missing)
@@ -25,68 +27,84 @@ def install_if_missing(package):
 for pkg in ["pandas", "mlxtend"]:
     install_if_missing(pkg)
 
-import pandas as pd
 from mlxtend.frequent_patterns import apriori, fpgrowth, association_rules
-# ==========================================================
-# STEP 0: Load Dataset (with file path check)
-# ==========================================================
-
-
-
+from mlxtend.preprocessing import TransactionEncoder
 
 # ==========================================================
-# STEP 1: Load Dataset (with file path check)
+# STEP 1: Select and Load Dataset (with flexible parsing)
 # ==========================================================
-import os
-import pandas as pd
-print("Here are the following transactional databases\n 1) Generic\n 2) Nike\n 3) Best Buy\n 4) Coffee Shop\n 5) K-mart\n ")
+print("Here are the following transactional databases\n"
+      " 1) Generic\n 2) Nike\n 3) Best Buy\n 4) Coffee Shop\n 5) K-mart\n ")
 
-
-    
- 
 def selectfile():
     while True:
-        fileNumber = int(input("Enter number to select a database: \n"))
-    
-        match fileNumber:
-            case 1:
-                return "generic_transactions.csv"
-            case 2:
-                return "nike_product_transactions.csv"
-            case 3:
-                return "bestbuy_transactions.csv"
-            case 4:
-                return "coffee_transactions.csv"
-            case 5:
-                return "k-mart_transactions.cs"
-            case _: 
-                print("Invalid Input Please try again")
+        try:
+            fileNumber = int(input("Enter number to select a database: \n"))
+            match fileNumber:
+                case 1:
+                    return "generic_transactions.csv"
+                case 2:
+                    return "nike_product_transactions.csv"
+                case 3:
+                    return "bestbuy_transactions.csv"
+                case 4:
+                    return "coffee_transactions.csv"
+                case 5:
+                    return "k-mart_transactions.csv"
+                case _:
+                    print("Invalid input. Please try again.")
+        except ValueError:
+            print("Please enter a valid number between 1–5.")
 
-
-
-# Always load relative to script location
+# Get file path
 base_path = os.path.dirname(os.path.abspath(__file__))
 file_path = os.path.join(base_path, selectfile())
-data = pd.read_csv(file_path)
 
-#filename = r"C:\SCHOOL PROJECTS\Data Mining\walters_taymar_midtermproj\generic_transactions.csv"
+# Columns that might represent transactions
+possible_cols = ["transaction", "transactions", "items", "basket"]
 
 try:
-    data = pd.read_csv(file_path)
-    print("✅ File loaded successfully!\n")
+    # Try to read the CSV normally, then fallback to alternate delimiter
+    try:
+        data = pd.read_csv(file_path)
+    except Exception:
+        data = pd.read_csv(file_path, delimiter=';')
+
+    data.columns = data.columns.str.strip().str.lower()
+    print(f"\n✅ File loaded successfully: {os.path.basename(file_path)}")
+    print(f"Columns detected: {list(data.columns)}\n")
+
+    # Detect transaction column dynamically
+    target_col = None
+    for col in possible_cols:
+        if col in data.columns:
+            target_col = col
+            break
+
+    if target_col is None:
+        raise KeyError("❌ No valid transaction column found in this file.")
+
+    transactions = [
+        str(t).replace(" ", "").split(",")
+        for t in data[target_col]
+        if pd.notna(t)
+    ]
+
+    print(f"📦 Loaded {len(transactions)} transactions.\n")
+
 except FileNotFoundError:
-    raise FileNotFoundError("❌ File not found. Please check your file path and try again.")
+    raise FileNotFoundError(f"❌ File not found: {file_path}")
+except Exception as e:
+    raise RuntimeError(f"⚠️ Error loading data: {e}")
 
 # ==========================================================
-# STEP 2: Parse transactions
+# STEP 2: Collect all unique items
 # ==========================================================
-transactions = [t.replace(" ", "").split(",") for t in data["Transaction"]]
 all_items = sorted(set(item for sublist in transactions for item in sublist))
 
-# =====================================================
-# USER INPUT SECTION
-# =====================================================
-
+# ==========================================================
+# STEP 3: User Input for Support & Confidence
+# ==========================================================
 try:
     min_support = float(input("Enter minimum support (e.g., 0.3 for 30%): "))
 except ValueError:
@@ -102,7 +120,7 @@ except ValueError:
 print(f"\nUsing min_support = {min_support} and min_confidence = {min_confidence}\n")
 
 # ==========================================================
-# STEP 3: Brute-force Frequent Itemset Mining
+# STEP 4: Brute-force Frequent Itemset Mining
 # ==========================================================
 def get_support(itemset, transactions):
     """Compute support count for a given itemset."""
@@ -130,14 +148,10 @@ def brute_force_mining(transactions, min_support):
 
     return frequent_itemsets
 
-# Run brute-force mining
-min_support = 0.3
 frequent_itemsets_brute = brute_force_mining(transactions, min_support)
 
-
-
 # ==========================================================
-# STEP 4: Generate Association Rules (Brute Force)
+# STEP 5: Generate Association Rules (Brute Force)
 # ==========================================================
 def generate_rules(frequent_itemsets, min_confidence, transactions):
     num_transactions = len(transactions)
@@ -157,18 +171,17 @@ def generate_rules(frequent_itemsets, min_confidence, transactions):
                     rules.append((antecedent, consequent, sup_itemset, confidence))
     return rules
 
-min_confidence = 0.6
 rules_brute = generate_rules(frequent_itemsets_brute, min_confidence, transactions)
 
 # ==========================================================
-# STEP 5: Convert to One-Hot Encoding for MLXTEND
+# STEP 6: One-Hot Encoding for MLXTEND
 # ==========================================================
-one_hot = pd.DataFrame(0, index=range(len(transactions)), columns=all_items)
-for i, t in enumerate(transactions):
-    one_hot.loc[i, t] = 1
+te = TransactionEncoder()
+te_ary = te.fit(transactions).transform(transactions)
+one_hot = pd.DataFrame(te_ary, columns=te.columns_)
 
 # ==========================================================
-# STEP 6: Run Apriori and FP-Growth
+# STEP 7: Run Apriori and FP-Growth
 # ==========================================================
 frequent_itemsets_ap = apriori(one_hot, min_support=min_support, use_colnames=True)
 rules_ap = association_rules(frequent_itemsets_ap, metric="confidence", min_threshold=min_confidence)
@@ -177,13 +190,14 @@ frequent_itemsets_fp = fpgrowth(one_hot, min_support=min_support, use_colnames=T
 rules_fp = association_rules(frequent_itemsets_fp, metric="confidence", min_threshold=min_confidence)
 
 # ==========================================================
-# STEP 7: Display Association Rules (All Algorithms)
+# STEP 8: Display Association Rules (All Algorithms)
 # ==========================================================
 print("\n\n================================================")
 print("🔹 FREQUENT ITEMS FOUND BY BRUTE FORCE:")
 print("================================================")
 for items, sup in frequent_itemsets_brute:
     print(f"{items} | support: {sup:.2f}")
+
 print("\n\n================================================")
 print("🔸 ASSOCIATION RULES — BRUTE FORCE")
 print("================================================")
