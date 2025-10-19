@@ -35,30 +35,48 @@ from mlxtend.preprocessing import TransactionEncoder
 # ==========================================================
 print("Here are the following transactional databases\n"
       " 1) Generic\n 2) Nike\n 3) Best Buy\n 4) Coffee Shop\n 5) K-mart\n ")
-
+items = ""
 def selectfile():
     while True:
         try:
             fileNumber = int(input("Enter number to select a database: \n"))
             match fileNumber:
                 case 1:
-                    return "generic_transactions.csv"
+                    items = "generic_items.csv"
+                    return "generic_transactions.csv", items
                 case 2:
-                    return "nike_product_transactions.csv"
+                    items = "nike_products.csv"
+                    return "nike_product_transactions.csv", items
                 case 3:
-                    return "bestbuy_transactions.csv"
+                    items = "bestbuy_products.csv"
+                    return "bestbuy_transactions.csv", items
                 case 4:
-                    return "coffee_transactions.csv"
+                    items = "coffee_items.csv"
+                    return "coffee_transactions.csv", items
                 case 5:
-                    return "k-mart_transactions.csv"
+                    items = "k-mart_items.csv"
+                    return "k-mart_transactions.csv", items
                 case _:
                     print("Invalid input. Please try again.")
         except ValueError:
             print("Please enter a valid number between 1–5.")
 
+transactions, items = selectfile()  
+base_path = os.path.dirname(os.path.abspath(__file__))
+file_path = os.path.join(base_path, items)
+
+print("================================================")
+print("Here are the list of items corresponding to the transactions:")
+print("================================================")
+df = pd.read_csv(file_path)
+df = df.dropna(how='all')
+df.columns = df.columns.str.strip()
+df["Item #"] = df["Item #"].astype(int)
+print(df.to_string(index=False))
+print("================================================")
 # Get file path
 base_path = os.path.dirname(os.path.abspath(__file__))
-file_path = os.path.join(base_path, selectfile())
+file_path = os.path.join(base_path, transactions)
 
 # Columns that might represent transactions
 possible_cols = ["transaction", "transactions", "items", "basket"]
@@ -71,8 +89,8 @@ try:
         data = pd.read_csv(file_path, delimiter=';')
 
     data.columns = data.columns.str.strip().str.lower()
-    print(f"\n✅ File loaded successfully: {os.path.basename(file_path)}")
-    print(f"Columns detected: {list(data.columns)}\n")
+    #print(f"\n✅ File loaded successfully: {os.path.basename(file_path)}")
+    #print(f"Columns detected: {list(data.columns)}\n")
 
     # Detect transaction column dynamically
     target_col = None
@@ -90,7 +108,7 @@ try:
         if pd.notna(t)
     ]
 
-    print(f"📦 Loaded {len(transactions)} transactions.\n")
+    #print(f"📦 Loaded {len(transactions)} transactions.\n")
 
 except FileNotFoundError:
     raise FileNotFoundError(f"❌ File not found: {file_path}")
@@ -183,11 +201,21 @@ one_hot = pd.DataFrame(te_ary, columns=te.columns_)
 # ==========================================================
 # STEP 7: Run Apriori and FP-Growth
 # ==========================================================
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+# Apriori
 frequent_itemsets_ap = apriori(one_hot, min_support=min_support, use_colnames=True)
 rules_ap = association_rules(frequent_itemsets_ap, metric="confidence", min_threshold=min_confidence)
+rules_ap = rules_ap.dropna()
+rules_ap = rules_ap[(rules_ap['support'] > 0) & (rules_ap['confidence'] > 0)]
 
+# FP-Growth
 frequent_itemsets_fp = fpgrowth(one_hot, min_support=min_support, use_colnames=True)
 rules_fp = association_rules(frequent_itemsets_fp, metric="confidence", min_threshold=min_confidence)
+rules_fp = rules_fp.dropna()
+rules_fp = rules_fp[(rules_fp['support'] > 0) & (rules_fp['confidence'] > 0)]
+
 
 # ==========================================================
 # STEP 8: Display Association Rules (All Algorithms)
