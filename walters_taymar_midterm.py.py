@@ -3,10 +3,11 @@
 # ----------------------------------------------------------
 # Author: Taymar Walters
 # Description:
-#   1. Load and parse a transactions CSV file (robust to header differences).
+#   1. Load and parse a transactions CSV file.
 #   2. Run a brute-force frequent itemset mining algorithm.
 #   3. Generate association rules from brute-force results.
 #   4. Run Apriori and FP-Growth using mlxtend for comparison.
+#   5. Track execution times for all algorithms.
 # ----------------------------------------------------------
 
 import itertools
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import os
 import pandas as pd
+import time  # <-- Added for timing
 
 # ==========================================================
 # STEP 0: Auto-install required packages (if missing)
@@ -31,31 +33,26 @@ from mlxtend.frequent_patterns import apriori, fpgrowth, association_rules
 from mlxtend.preprocessing import TransactionEncoder
 
 # ==========================================================
-# STEP 1: Select and Load Dataset (with flexible parsing)
+# STEP 1: Select and Load Datasets 
 # ==========================================================
 print("Here are the following transactional databases\n"
       " 1) Generic\n 2) Nike\n 3) Best Buy\n 4) Coffee Shop\n 5) K-mart\n ")
-items = ""
+
 def selectfile():
     while True:
         try:
             fileNumber = int(input("Enter number to select a database: \n"))
             match fileNumber:
                 case 1:
-                    items = "generic_items.csv"
-                    return "generic_transactions.csv", items
+                    return "generic_transactions.csv", "generic_items.csv"
                 case 2:
-                    items = "nike_products.csv"
-                    return "nike_product_transactions.csv", items
+                    return "nike_product_transactions.csv", "nike_products.csv"
                 case 3:
-                    items = "bestbuy_products.csv"
-                    return "bestbuy_transactions.csv", items
+                    return "bestbuy_transactions.csv", "bestbuy_products.csv"
                 case 4:
-                    items = "coffee_items.csv"
-                    return "coffee_transactions.csv", items
+                    return "coffee_transactions.csv", "coffee_items.csv"
                 case 5:
-                    items = "k-mart_items.csv"
-                    return "k-mart_transactions.csv", items
+                    return "k-mart_transactions.csv", "k-mart_items.csv"
                 case _:
                     print("Invalid input. Please try again.")
         except ValueError:
@@ -65,40 +62,27 @@ transactions, items = selectfile()
 base_path = os.path.dirname(os.path.abspath(__file__))
 file_path = os.path.join(base_path, items)
 
-print("================================================")
-print("Here are the list of items corresponding to the transactions:")
-print("================================================")
-df = pd.read_csv(file_path)
-df = df.dropna(how='all')
+print("=============================================================")
+print("Here are the unique items corresponding to the transactions:")
+print("=============================================================")
+df = pd.read_csv(file_path).dropna(how='all')
 df.columns = df.columns.str.strip()
 df["Item #"] = df["Item #"].astype(int)
 print(df.to_string(index=False))
 print("================================================")
-# Get file path
-base_path = os.path.dirname(os.path.abspath(__file__))
-file_path = os.path.join(base_path, transactions)
 
-# Columns that might represent transactions
+file_path = os.path.join(base_path, transactions)
 possible_cols = ["transaction", "transactions", "items", "basket"]
 
 try:
-    # Try to read the CSV normally, then fallback to alternate delimiter
     try:
         data = pd.read_csv(file_path)
     except Exception:
         data = pd.read_csv(file_path, delimiter=';')
 
     data.columns = data.columns.str.strip().str.lower()
-    #print(f"\n✅ File loaded successfully: {os.path.basename(file_path)}")
-    #print(f"Columns detected: {list(data.columns)}\n")
 
-    # Detect transaction column dynamically
-    target_col = None
-    for col in possible_cols:
-        if col in data.columns:
-            target_col = col
-            break
-
+    target_col = next((col for col in possible_cols if col in data.columns), None)
     if target_col is None:
         raise KeyError("❌ No valid transaction column found in this file.")
 
@@ -108,15 +92,13 @@ try:
         if pd.notna(t)
     ]
 
-    #print(f"📦 Loaded {len(transactions)} transactions.\n")
-
 except FileNotFoundError:
     raise FileNotFoundError(f"❌ File not found: {file_path}")
 except Exception as e:
     raise RuntimeError(f"⚠️ Error loading data: {e}")
 
 # ==========================================================
-# STEP 2: Collect all unique items
+# STEP 2: Collect all the unique items for Brute force
 # ==========================================================
 all_items = sorted(set(item for sublist in transactions for item in sublist))
 
@@ -138,10 +120,9 @@ except ValueError:
 print(f"\nUsing min_support = {min_support} and min_confidence = {min_confidence}\n")
 
 # ==========================================================
-# STEP 4: Brute-force Frequent Itemset Mining
+# STEP 4: Brute-force Frequent Itemset Mining (with timing)
 # ==========================================================
 def get_support(itemset, transactions):
-    """Compute support count for a given itemset."""
     return sum(1 for t in transactions if set(itemset).issubset(set(t)))
 
 def brute_force_mining(transactions, min_support):
@@ -166,15 +147,15 @@ def brute_force_mining(transactions, min_support):
 
     return frequent_itemsets
 
+print("\nRunning Brute-Force Algorithm...")
+start_brute = time.time()
 frequent_itemsets_brute = brute_force_mining(transactions, min_support)
+rules_brute = []
+rules_brute_start = time.time()
 
-# ==========================================================
-# STEP 5: Generate Association Rules (Brute Force)
-# ==========================================================
 def generate_rules(frequent_itemsets, min_confidence, transactions):
     num_transactions = len(transactions)
     rules = []
-
     for itemset, support in frequent_itemsets:
         if len(itemset) < 2:
             continue
@@ -184,12 +165,13 @@ def generate_rules(frequent_itemsets, min_confidence, transactions):
                 sup_itemset = get_support(itemset, transactions) / num_transactions
                 sup_antecedent = get_support(antecedent, transactions) / num_transactions
                 confidence = sup_itemset / sup_antecedent if sup_antecedent > 0 else 0
-
                 if confidence >= min_confidence:
                     rules.append((antecedent, consequent, sup_itemset, confidence))
     return rules
 
 rules_brute = generate_rules(frequent_itemsets_brute, min_confidence, transactions)
+end_brute = time.time()
+brute_force_time = end_brute - start_brute
 
 # ==========================================================
 # STEP 6: One-Hot Encoding for MLXTEND
@@ -199,23 +181,28 @@ te_ary = te.fit(transactions).transform(transactions)
 one_hot = pd.DataFrame(te_ary, columns=te.columns_)
 
 # ==========================================================
-# STEP 7: Run Apriori and FP-Growth
+# STEP 7: Run Apriori and FP-Growth (with timing)
 # ==========================================================
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-# Apriori
+print("\nRunning Apriori Algorithm...")
+start_apriori = time.time()
 frequent_itemsets_ap = apriori(one_hot, min_support=min_support, use_colnames=True)
 rules_ap = association_rules(frequent_itemsets_ap, metric="confidence", min_threshold=min_confidence)
 rules_ap = rules_ap.dropna()
 rules_ap = rules_ap[(rules_ap['support'] > 0) & (rules_ap['confidence'] > 0)]
+end_apriori = time.time()
+apriori_time = end_apriori - start_apriori
 
-# FP-Growth
+print("Running FP-Growth Algorithm...")
+start_fp = time.time()
 frequent_itemsets_fp = fpgrowth(one_hot, min_support=min_support, use_colnames=True)
 rules_fp = association_rules(frequent_itemsets_fp, metric="confidence", min_threshold=min_confidence)
 rules_fp = rules_fp.dropna()
 rules_fp = rules_fp[(rules_fp['support'] > 0) & (rules_fp['confidence'] > 0)]
-
+end_fp = time.time()
+fp_growth_time = end_fp - start_fp
 
 # ==========================================================
 # STEP 8: Display Association Rules (All Algorithms)
@@ -245,5 +232,16 @@ print("================================================")
 for _, row in rules_fp.iterrows():
     print(f"{tuple(row['antecedents'])} → {tuple(row['consequents'])} "
           f"(support: {row['support']:.2f}, confidence: {row['confidence']:.2f})")
+
+# ==========================================================
+# STEP 9: Display Timing Summary
+# ==========================================================
+print("\n\n================================================")
+print("⏱️ EXECUTION TIME SUMMARY (seconds)")
+print("================================================")
+print(f"Brute-Force Algorithm: {brute_force_time:.4f} sec")
+print(f"Apriori Algorithm:     {apriori_time:.4f} sec")
+print(f"FP-Growth Algorithm:   {fp_growth_time:.4f} sec")
+print("================================================")
 
 print("\n✅ All algorithms executed successfully!")
